@@ -1,3 +1,12 @@
 godo
 db.json
 test.json
+database-data/
+.DS_Store
+
+# Compiled Object files, Static and Dynamic libs
+*.o
+*.a
+*.so
+
+zarf/compose/database-data/data

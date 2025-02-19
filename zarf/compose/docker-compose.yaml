@@ -1,0 +1,58 @@
+services:
+  database:
+    image: postgres:17.3
+    container_name: database
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - ./database-data:/var/lib/postgresql/data
+      - ./pg_hba.conf:/etc/pg_hba.conf
+    command: [ '-c', 'hba_file=/etc/pg_hba.conf' ]
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -h localhost -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    cpu_count: 2
+    networks:
+      godo-network:
+        ipv4_address: 10.5.0.2
+  server:
+    image: localhost/charlieroth/godo:0.1.0
+    pull_policy: never
+    container_name: server
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/liveness || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 2s
+    cpu_count: 2
+    environment:
+      - GOMAXPROCS=2
+      - GODO_DB_USER=postgres
+      - GODO_DB_PASSWORD=postgres
+      - GODO_DB_HOST=database
+      - GODO_DB_DISABLE_TLS=true
+    expose:
+      - "8080:8080"
+    networks:
+      godo-network:
+        ipv4_address: 10.5.0.5
+    depends_on:
+      - database
+
+volumes:
+  database: {}
+
+networks:
+  godo-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.5.0.0/24
