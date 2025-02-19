@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/charlieroth/godo/internal/domain"
 	"github.com/charlieroth/godo/internal/store"
 )
 
 type AddCmd struct {
-	Title   string
 	Args    []string
 	FlagSet *flag.FlagSet
 }
@@ -22,19 +22,16 @@ type ListCmd struct {
 }
 
 type DoCmd struct {
-	ID      int
 	Args    []string
 	FlagSet *flag.FlagSet
 }
 
 type UndoCmd struct {
-	ID      int
 	Args    []string
 	FlagSet *flag.FlagSet
 }
 
 type DeleteCmd struct {
-	ID      int
 	Args    []string
 	FlagSet *flag.FlagSet
 }
@@ -49,38 +46,36 @@ type App struct {
 }
 
 func NewApp(store *store.JsonStore) *App {
-	addCmd := flag.NewFlagSet("add", flag.ExitOnError)
-	var title string
-	addCmd.StringVar(&title, "title", "Unnamed Task", "Title of task to add.")
+	addCmdFlagSet := flag.NewFlagSet("add", flag.ExitOnError)
+	addCmdFlagSet.String("title", "Unnamed Task", "Title of task to add.")
 
-	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
+	listCmdFlagSet := flag.NewFlagSet("list", flag.ExitOnError)
 
-	var taskID int
-	doCmd := flag.NewFlagSet("do", flag.ExitOnError)
-	doCmd.IntVar(&taskID, "id", 0, "ID of task to mark as done.")
+	doCmdFlagSet := flag.NewFlagSet("do", flag.ExitOnError)
+	doCmdFlagSet.Int("id", 0, "ID of task to mark as done.")
 
-	undoCmd := flag.NewFlagSet("undo", flag.ExitOnError)
-	undoCmd.IntVar(&taskID, "id", 0, "ID of task to mark as undone.")
+	undoCmdFlagSet := flag.NewFlagSet("undo", flag.ExitOnError)
+	undoCmdFlagSet.Int("id", 0, "ID of task to mark as undone.")
 
-	deleteCmd := flag.NewFlagSet("delete", flag.ExitOnError)
-	deleteCmd.IntVar(&taskID, "id", 0, "ID of task to delete.")
+	deleteCmdFlagSet := flag.NewFlagSet("delete", flag.ExitOnError)
+	deleteCmdFlagSet.Int("id", 0, "ID of task to delete.")
 
 	return &App{
 		Store: store,
 		AddCmd: AddCmd{
-			FlagSet: addCmd,
+			FlagSet: addCmdFlagSet,
 		},
 		ListCmd: ListCmd{
-			FlagSet: listCmd,
+			FlagSet: listCmdFlagSet,
 		},
 		DoCmd: DoCmd{
-			FlagSet: doCmd,
+			FlagSet: doCmdFlagSet,
 		},
 		UndoCmd: UndoCmd{
-			FlagSet: undoCmd,
+			FlagSet: undoCmdFlagSet,
 		},
 		DeleteCmd: DeleteCmd{
-			FlagSet: deleteCmd,
+			FlagSet: deleteCmdFlagSet,
 		},
 	}
 }
@@ -133,9 +128,11 @@ func (a *App) Add(args []string) error {
 		return fmt.Errorf("error parsing add command: %w", err)
 	}
 
-	task := &domain.Task{
+	title := a.AddCmd.FlagSet.Lookup("title").Value.String()
+
+	task := domain.Task{
 		ID:    a.Store.NextID(),
-		Title: a.AddCmd.Title,
+		Title: title,
 		Done:  false,
 	}
 
@@ -161,12 +158,13 @@ func (a *App) List(args []string) error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf("Tasks: %v\n", tasks)
 
 	for _, task := range tasks {
 		if task.Done {
-			fmt.Println(task.ID, task.Title, "✅")
+			fmt.Printf("[x] %d. %s\n", task.ID, task.Title)
 		} else {
-			fmt.Println(task.ID, task.Title, "❌")
+			fmt.Printf("[ ] %d. %s\n", task.ID, task.Title)
 		}
 	}
 
@@ -178,7 +176,13 @@ func (a *App) Do(args []string) error {
 		return fmt.Errorf("error parsing do command: %w", err)
 	}
 
-	task, err := a.Store.Get(a.DoCmd.ID)
+	taskIDString := a.DoCmd.FlagSet.Lookup("id").Value.String()
+	taskID, err := strconv.Atoi(taskIDString)
+	if err != nil {
+		return fmt.Errorf("error converting task ID to int: %w", err)
+	}
+
+	task, err := a.Store.Get(taskID)
 	if err != nil {
 		return err
 	}
@@ -202,7 +206,13 @@ func (a *App) Undo(args []string) error {
 		return fmt.Errorf("error parsing undo command: %w", err)
 	}
 
-	task, err := a.Store.Get(a.UndoCmd.ID)
+	taskIDString := a.UndoCmd.FlagSet.Lookup("id").Value.String()
+	taskID, err := strconv.Atoi(taskIDString)
+	if err != nil {
+		return fmt.Errorf("error converting task ID to int: %w", err)
+	}
+
+	task, err := a.Store.Get(taskID)
 	if err != nil {
 		return err
 	}
@@ -226,7 +236,13 @@ func (a *App) Delete(args []string) error {
 		return fmt.Errorf("error parsing delete command: %w", err)
 	}
 
-	err := a.Store.Delete(a.DeleteCmd.ID)
+	taskIDString := a.DeleteCmd.FlagSet.Lookup("id").Value.String()
+	taskID, err := strconv.Atoi(taskIDString)
+	if err != nil {
+		return fmt.Errorf("error converting task ID to int: %w", err)
+	}
+
+	err = a.Store.Delete(taskID)
 	if err != nil {
 		return err
 	}
@@ -249,7 +265,7 @@ func Help() {
 	fmt.Println("  delete  Delete a task")
 	fmt.Println("  help    Show this help message")
 	fmt.Println("\nExamples:")
-	fmt.Println("  godo add -name \"Buy groceries\"")
+	fmt.Println("  godo add -title \"Buy groceries\"")
 	fmt.Println("  godo list")
 	fmt.Println("  godo do -id 1")
 	fmt.Println("  godo undo -id 1")

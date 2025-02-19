@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	models "github.com/charlieroth/godo/internal/domain"
@@ -9,23 +10,29 @@ import (
 
 type JsonStore struct {
 	dbPath string
-	tasks  []*models.Task
+	tasks  map[int]models.Task
+	nextID int
 }
 
 func NewJsonStore(dbPath string) *JsonStore {
 	return &JsonStore{
 		dbPath: dbPath,
-		tasks:  []*models.Task{},
+		tasks:  make(map[int]models.Task),
+		nextID: 1,
 	}
 }
 
 func (s *JsonStore) Load() error {
 	jsonFile, err := os.Open(s.dbPath)
 	if os.IsNotExist(err) {
-		_, err := os.Create(s.dbPath)
+		file, err := os.Create(s.dbPath)
 		if err != nil {
 			return err
 		}
+
+		file.Write([]byte("{}"))
+		file.Close()
+
 		return nil
 	}
 
@@ -56,47 +63,42 @@ func (s *JsonStore) Save() error {
 	return nil
 }
 
-func (s *JsonStore) Add(task *models.Task) error {
-	s.tasks = append(s.tasks, task)
+func (s *JsonStore) Add(task models.Task) error {
+	s.tasks[s.nextID] = task
+	s.nextID++
 	return nil
 }
 
-func (s *JsonStore) Update(task *models.Task) error {
-	for i, t := range s.tasks {
-		if t.ID == task.ID {
-			s.tasks[i] = task
-			return nil
-		}
+func (s *JsonStore) Update(task models.Task) error {
+	if _, ok := s.tasks[task.ID]; !ok {
+		return fmt.Errorf("task with id %d not found", task.ID)
 	}
 
+	s.tasks[task.ID] = task
 	return nil
 }
 
 func (s *JsonStore) Delete(id int) error {
-	for i, t := range s.tasks {
-		if t.ID == id {
-			s.tasks = append(s.tasks[:i], s.tasks[i+1:]...)
-			return nil
-		}
-	}
-
+	delete(s.tasks, id)
 	return nil
 }
 
-func (s *JsonStore) List() ([]*models.Task, error) {
-	return s.tasks, nil
+func (s *JsonStore) List() ([]models.Task, error) {
+	tasks := make([]models.Task, 0, len(s.tasks))
+	for _, task := range s.tasks {
+		tasks = append(tasks, task)
+	}
+	return tasks, nil
 }
 
-func (s *JsonStore) Get(id int) (*models.Task, error) {
-	for _, t := range s.tasks {
-		if t.ID == id {
-			return t, nil
-		}
+func (s *JsonStore) Get(id int) (models.Task, error) {
+	task, ok := s.tasks[id]
+	if !ok {
+		return models.Task{}, fmt.Errorf("task with id %d not found", id)
 	}
-
-	return nil, nil
+	return task, nil
 }
 
 func (s *JsonStore) NextID() int {
-	return len(s.tasks) + 1
+	return s.nextID
 }
